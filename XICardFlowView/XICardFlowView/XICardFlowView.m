@@ -9,15 +9,12 @@
 #import "XICardFlowView.h"
 #import <objc/runtime.h>
 
-#define screenSize [UIScreen mainScreen].bounds.size
 #define kDefaultItemSpacing 20
 #define kDefaultInvisibleViewMinScaleValue 0.95
 #define kDefaultInvisibleViewMinAlphaValue 0.8
 
 @interface XICardFlowLayout ()
-{
-    NSInteger centerPageIndex;
-}
+
 @property(nonatomic, assign) CGFloat scaleFactor;
 @property(nonatomic, assign) CGFloat activeDistance;
 @property(nonatomic, assign) CGFloat alphaFactor;
@@ -36,46 +33,16 @@
     }
     return self;
 }
-
 @end
 
 @interface XICardFlowView ()<UICollectionViewDelegate, UICollectionViewDataSource>
 {
     NSInteger lastPageIndex;
     BOOL scrollingByDragging;
-    BOOL hasReloaded;
 }
-- (void)_reloaddata;
 @end
 
 @implementation XICardFlowView
-
-+ (void)load {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        Class class = [self class];
-        
-        SEL originalSelector = @selector(reloadData);
-        SEL swizzledSelector = @selector(_reloaddata);
-        
-        Method originalMethod = class_getInstanceMethod(class, originalSelector);
-        Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
-        
-        BOOL didAddMethod = class_addMethod(class,
-                                            originalSelector,
-                                            method_getImplementation(swizzledMethod),
-                                            method_getTypeEncoding(swizzledMethod));
-        
-        if (didAddMethod) {
-            class_replaceMethod(class,
-                                swizzledSelector,
-                                method_getImplementation(originalMethod),
-                                method_getTypeEncoding(originalMethod));
-        } else {
-            method_exchangeImplementations(originalMethod, swizzledMethod);
-        }
-    });
-}
 
 - (instancetype)initWithFrame:(CGRect)frame collectionViewLayout:(UICollectionViewLayout *)layout
 {
@@ -101,46 +68,6 @@
         self.decelerationRate = UIScrollViewDecelerationRateFast;
     }
     return self;
-}
-
-// exchanges IMP of '_reloaddata' with the 'reloadData'.
-- (void)_reloaddata
-{
-    NSLog(@"%s, findVisibleCells :%@", __FUNCTION__, @([self numberOfVisibleCells]));
-    NSInteger _visiblecells = [self numberOfVisibleCells];
-    BOOL _reachTheEnding = !(self.contentOffset.x+CGRectGetWidth([UIScreen mainScreen].bounds)<self.contentSize.width);
-    if(hasReloaded && _visiblecells>1 && _reachTheEnding){
-        [self reloadSections:[NSIndexSet indexSetWithIndex:0]];
-    }
-    else{
-        if(!hasReloaded){
-            hasReloaded = YES;
-        }
-        [self _reloaddata];
-    }
-}
-
-// '[self visibleCells]' would call [self reloadData] implicitly, so don't call '[self visibleCells]' directly in '_reloaddata'.
-- (NSInteger)numberOfVisibleCells
-{
-    NSInteger totalCount = 0;
-    [self findCellOnView:self result:&totalCount];
-    return totalCount;
-}
-
-- (void)findCellOnView:(UIView *)view result:(NSInteger *)result
-{
-    NSArray *_subviews=[view subviews];
-    if(_subviews&&_subviews.count>0) {
-        for(UIView *v in _subviews){
-            if([v isKindOfClass:[UICollectionViewCell class]] && !v.hidden){
-                (*result)++;
-            }
-            else{
-                [self findCellOnView:v result:result];
-            }
-        }
-    }
 }
 
 - (XICardFlowLayout *)_flowLayout
@@ -174,7 +101,6 @@
     _itemSize = itemSize;
     [self _flowLayout].itemSize = itemSize;
     [self _flowLayout].activeDistance = itemSize.width;
-    [self _flowLayout].sectionInset = UIEdgeInsetsMake(0, (screenSize.width-self.itemSize.width)/2, 0, (screenSize.width-self.itemSize.width)/2);
     
     if(self.superview){
         [[self _flowLayout] invalidateLayout];
@@ -233,10 +159,10 @@
 
 - (NSInteger)collectionView:(UICollectionView *)view numberOfItemsInSection:(NSInteger)section;
 {
-    NSInteger numberOfItems;
-    if([self.cf_delegate respondsToSelector:@selector(numberOfCardsForCardFlowView:)]){
+    NSInteger numberOfItems = 0;
+    if([self.wrappedDelegate respondsToSelector:@selector(numberOfCardsForCardFlowView:)]){
         
-        numberOfItems = [self.cf_delegate numberOfCardsForCardFlowView:self];
+        numberOfItems = [self.wrappedDelegate numberOfCardsForCardFlowView:self];
         if([self.pageControl respondsToSelector:@selector(setNumberOfPages:)]){
             [self.pageControl setNumberOfPages:numberOfItems];
         }
@@ -247,8 +173,8 @@
 - (UICollectionViewCell *)collectionView:(UICollectionView *)cv cellForItemAtIndexPath:(NSIndexPath *)indexPath
 {
     UICollectionViewCell *cell;
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowView:cardViewAtIndexPath:)]){
-        cell = [self.cf_delegate cardFlowView:self cardViewAtIndexPath:indexPath];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowView:cardViewAtIndexPath:)]){
+        cell = [self.wrappedDelegate cardFlowView:self cardViewAtIndexPath:indexPath];
         return cell;
     }
     return cell;
@@ -284,29 +210,29 @@
     NSIndexPath *nextIndexPath = [self indexPathForItemAtPoint:nextPoint];
     
     if (scrollingByDragging && centeredIndexPath.row != nextIndexPath.row) {
-        if([self.cf_delegate respondsToSelector:@selector(cardFlowView:centeredIndexWillChange:)]){
-            [self.cf_delegate cardFlowView:self centeredIndexWillChange:centeredIndexPath.row];
+        if([self.wrappedDelegate respondsToSelector:@selector(cardFlowView:centeredIndexWillChange:)]){
+            [self.wrappedDelegate cardFlowView:self centeredIndexWillChange:centeredIndexPath.row];
         }
     }
     
     if (scrollingByDragging && _pageControl && [_pageControl respondsToSelector:@selector(setCurrentPage:)]) {
-                
+        
         if (centeredIndexPath.row != nextIndexPath.row) {
             [_pageControl setCurrentPage:centeredIndexPath.row];
         }
     }
     
     //---
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowViewDidScroll:)]){
-        [self.cf_delegate cardFlowViewDidScroll:scrollView];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowViewDidScroll:)]){
+        [self.wrappedDelegate cardFlowViewDidScroll:scrollView];
     }
 }
 
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
 {
     //---
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowViewDidEndDragging:willDecelerate:)]){
-        [self.cf_delegate cardFlowViewDidEndDragging:scrollView willDecelerate:decelerate];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowViewDidEndDragging:willDecelerate:)]){
+        [self.wrappedDelegate cardFlowViewDidEndDragging:scrollView willDecelerate:decelerate];
     }
 }
 
@@ -315,15 +241,15 @@
     CGPoint point = [self.superview convertPoint:self.center toView:self];
     NSIndexPath *indexPath = [self indexPathForItemAtPoint:point];
     
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowView:didSelectFromIndex:to:)]){
-        [self.cf_delegate cardFlowView:self didSelectFromIndex:lastPageIndex to:indexPath.row];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowView:didSelectFromIndex:to:)]){
+        [self.wrappedDelegate cardFlowView:self didSelectFromIndex:lastPageIndex to:indexPath.row];
     }
     
     scrollingByDragging = NO;
     
     //---
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowViewDidEndDecelerating:)]){
-        [self.cf_delegate cardFlowViewDidEndDecelerating:scrollView];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowViewDidEndDecelerating:)]){
+        [self.wrappedDelegate cardFlowViewDidEndDecelerating:scrollView];
     }
 }
 
@@ -332,13 +258,13 @@
     CGPoint point = [self.superview convertPoint:self.center toView:self];
     NSIndexPath *indexPath = [self indexPathForItemAtPoint:point];
     
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowView:didSelectFromIndex:to:)]){
-        [self.cf_delegate cardFlowView:self didSelectFromIndex:lastPageIndex to:indexPath.row];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowView:didSelectFromIndex:to:)]){
+        [self.wrappedDelegate cardFlowView:self didSelectFromIndex:lastPageIndex to:indexPath.row];
     }
     
     //---
-    if([self.cf_delegate respondsToSelector:@selector(cardFlowViewDidEndScrollingAnimation:)]){
-        [self.cf_delegate cardFlowViewDidEndScrollingAnimation:scrollView];
+    if([self.wrappedDelegate respondsToSelector:@selector(cardFlowViewDidEndScrollingAnimation:)]){
+        [self.wrappedDelegate cardFlowViewDidEndScrollingAnimation:scrollView];
     }
 }
 
@@ -349,12 +275,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 @implementation XICardFlowLayout
+{
+    CGFloat _insetsValue;
+}
 
 -(id)init
 {
     self = [super init];
     if (self) {
-        centerPageIndex = 0;
         self.scrollDirection = UICollectionViewScrollDirectionHorizontal;
     }
     return self;
@@ -366,61 +294,77 @@
         self.itemSize = itemSize;
         self.minimumLineSpacing = space;
         self.activeDistance = self.itemSize.width;
-        self.sectionInset = UIEdgeInsetsMake(0, (screenSize.width-self.itemSize.width)/2, 0, (screenSize.width-self.itemSize.width)/2);
         self.scaleFactor = factor;
         self.alphaFactor = factor1;
     }
     return self;
 }
 
+- (void)prepareLayout
+{
+    [super prepareLayout];
+    _insetsValue = (CGRectGetWidth(self.collectionView.frame) - self.itemSize.width)/2;
+    self.sectionInset = UIEdgeInsetsMake(0, _insetsValue, 0, _insetsValue);
+    
+    self.collectionView.contentSize = [self collectionViewContentSize];
+}
+
 - (CGSize)collectionViewContentSize
 {
-    return [super collectionViewContentSize];
+    NSInteger rowCount = [self.collectionView numberOfItemsInSection:0];
+    CGFloat _contentSizeWidth = _insetsValue*2+self.itemSize.width*rowCount+self.minimumLineSpacing*(rowCount-1);
+    return CGSizeMake(_contentSizeWidth, CGRectGetHeight(self.collectionView.frame));
 }
 
 - (BOOL)shouldInvalidateLayoutForBoundsChange:(CGRect)newBounds
 {
-    BOOL res = [super shouldInvalidateLayoutForBoundsChange:newBounds];
-    res = YES;
-    return res;
+    return YES;
 }
 
 -(NSArray*)layoutAttributesForElementsInRect:(CGRect)rect
 {
-    
-    NSMutableArray *array = [NSMutableArray arrayWithCapacity:5];
+    NSMutableArray *array = [NSMutableArray arrayWithCapacity:10];
     NSArray* originalArray = [super layoutAttributesForElementsInRect:rect];
-    for(UICollectionViewLayoutAttributes *attributes in originalArray){
-        [array addObject:[attributes copy]];
+    
+    for (UICollectionViewLayoutAttributes* elem in originalArray) {
+        
+        UICollectionViewLayoutAttributes *attributes = [self layoutAttributesForItemAtIndexPath:elem.indexPath];
+        [array addObject:attributes];
     }
+    return array;
+}
+
+- (UICollectionViewLayoutAttributes *)layoutAttributesForItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    UICollectionViewLayoutAttributes *attributes = [UICollectionViewLayoutAttributes layoutAttributesForCellWithIndexPath:indexPath];
+    attributes.size = self.itemSize;
+    
+    CGFloat itemCenterX = _insetsValue + self.pageWidth * indexPath.row + self.itemSize.width / 2;
+    attributes.center = CGPointMake(itemCenterX, CGRectGetHeight(self.collectionView.frame)/2);
     
     CGRect visibleRect;
     visibleRect.origin = self.collectionView.contentOffset;
     visibleRect.size = self.collectionView.bounds.size;
     
-    for (UICollectionViewLayoutAttributes* attributes in array) {
-        if (CGRectIntersectsRect(attributes.frame, rect)) {
-            CGFloat distance = CGRectGetMidX(visibleRect) - attributes.center.x;
-            CGFloat normalizedDistance = distance / self.activeDistance;
-            CGFloat scale;
-            attributes.transform3D = CATransform3DIdentity;
-            attributes.alpha = 1;
-            
-            if (ABS(distance) < self.activeDistance) {
-                scale = 1- self.scaleFactor*ABS(normalizedDistance);
-                attributes.transform3D = CATransform3DMakeScale(scale, scale, 1.0);
-                attributes.alpha = 1-self.alphaFactor*ABS(normalizedDistance);
-                attributes.zIndex = 1;
-            }
-            else{
-                scale = 1-self.scaleFactor;
-                attributes.transform3D = CATransform3DMakeScale(scale, scale, 1.0);
-                attributes.alpha = 1-self.alphaFactor;
-                attributes.zIndex = 0;
-            }
-        }
+    CGFloat distance = CGRectGetMidX(visibleRect) - attributes.center.x;
+    CGFloat changeRatio = distance / self.activeDistance;
+    CGFloat scale;
+    
+    if (fabs(distance) < self.activeDistance) {
+        scale = 1-self.scaleFactor*ABS(changeRatio);
+        attributes.transform3D = CATransform3DMakeScale(scale, scale, 1.0);
+        
+        attributes.alpha = 1-self.alphaFactor*ABS(changeRatio);
+        attributes.zIndex = 1;
     }
-    return array;
+    else{
+        scale = 1 - self.scaleFactor;
+        attributes.zIndex = 0;
+        attributes.transform3D = CATransform3DMakeScale(scale, scale, 1.0);
+        attributes.alpha = 1-self.alphaFactor;
+    }
+    
+    return attributes;
 }
 
 - (CGFloat)pageWidth {

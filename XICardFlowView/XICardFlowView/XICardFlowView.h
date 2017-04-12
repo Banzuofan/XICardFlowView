@@ -15,7 +15,7 @@
 @protocol XICardFlowViewDelegate;
 @interface XICardFlowView : UICollectionView
 
-@property(nonatomic, weak) id<XICardFlowViewDelegate> cf_delegate;
+@property(nonatomic, weak) id<XICardFlowViewDelegate> wrappedDelegate;
 @property(nonatomic, weak) UIPageControl *pageControl;
 
 @property(nonatomic, assign) NSInteger itemSpace;

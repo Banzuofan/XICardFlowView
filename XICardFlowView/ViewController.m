@@ -12,7 +12,7 @@
 #import "XIRadioButtonsGroupView.h"
 
 #define kScreenWidth CGRectGetWidth([UIScreen mainScreen].bounds)
-#define kCellMaxNum 4
+#define kCellMaxNum 7
 
 #define  kRandomColor [UIColor colorWithRed:arc4random_uniform(255)/255.0 \
                                       green:arc4random_uniform(255)/255.0 \
@@ -81,10 +81,10 @@
     
     _cardFlowView = [[XICardFlowView alloc] initWithFrame:CGRectMake(0, 170, kScreenWidth, 320)];
     _cardFlowView.itemSize = CGSizeMake(kScreenWidth-50, 320);
-    _cardFlowView.invisibleViewMinScaleValue = 0.98;
-    _cardFlowView.invisibleViewMinAlphaValue = 1;
-    _cardFlowView.itemSpace = 5;
-    _cardFlowView.cf_delegate = self;
+    _cardFlowView.invisibleViewMinScaleValue = 0.9;
+    _cardFlowView.invisibleViewMinAlphaValue = 0.6;
+    _cardFlowView.itemSpace = -5;
+    _cardFlowView.wrappedDelegate = self;
     [self.view addSubview:_cardFlowView];
     
     [_cardFlowView registerClass:[XICardFlowCell class] forCellWithReuseIdentifier:@"ReusedCell"];
